@@ -1,6 +1,7 @@
 (function (global) {
   'use strict';
   const NS='http://www.w3.org/2000/svg';
+  let radialInstance=0;
   function svgEl(tag, attrs, parent) { const el=document.createElementNS(NS,tag);for(const [name,value] of Object.entries(attrs))el.setAttribute(name,String(value));parent.appendChild(el);return el; }
   function textEl(tag,text,klass,parent) { const el=document.createElement(tag);if(klass)el.className=klass;el.textContent=text;parent.appendChild(el);return el; }
   function amount(value,unit){return new Intl.NumberFormat(undefined,{maximumFractionDigits:2}).format(value)+(unit?' '+unit:'');}
@@ -9,7 +10,7 @@
     root.replaceChildren();root.className='chart-export';root.style.setProperty('--visual-primary',theme.primary);
     root.style.fontFamily=theme.font==='jakarta'?'"Plus Jakarta Sans",ui-sans-serif,sans-serif':theme.font==='serif'?'Georgia,serif':theme.font==='mono'?'ui-monospace,Menlo,Consolas,monospace':'ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
     const header=textEl('header','',null,root);header.textContent='';
-    const visualNames={trend:'Trend chart',comparison:'Ranked comparison',funnel:'Pipeline funnel',scatter:'Account scatterplot',heatmap:'Category heatmap'};
+    const visualNames={trend:'Trend chart',comparison:'Ranked comparison',funnel:'Pipeline funnel',scatter:'Account scatterplot',heatmap:'Category heatmap',radial:'Radial progress rings'};
     textEl('div','A Clean Glean / '+visualNames[templateId],'chart-eyebrow',header);
     if(theme.logo){const logo=document.createElement('img');logo.src=theme.logo;logo.alt='Brand logo';logo.className='chart-logo';header.appendChild(logo);}
     textEl('h1',presentation.title,'',header);textEl('p',presentation.subtitle,'chart-subtitle',header);
@@ -17,7 +18,9 @@
     textEl('span',presentation.source||'Source not supplied','',meta);if(presentation.dataDate)textEl('span','Data date: '+presentation.dataDate,'',meta);
     const controls=textEl('div','', 'chart-controls',root);
     const figure=textEl('section','', 'chart-panel',root);figure.setAttribute('aria-label',visualNames[templateId]);
-    const svg=svgEl('svg',{viewBox:'0 0 900 430',role:'img','aria-label':'Interactive chart. Use the data table below to inspect exact values.'},figure);
+    if(templateId==='radial')figure.classList.add('radial-panel');
+    const svg=svgEl('svg',{viewBox:templateId==='radial'?'0 0 560 440':'0 0 900 430',role:templateId==='radial'?'group':'img','aria-label':'Interactive chart. Use the data table below to inspect exact values.'},figure);
+    const radialLegend=templateId==='radial'?textEl('div','','radial-legend',figure):null;
     const status=textEl('p','Select a mark or table row for details.','chart-detail',root);status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     const tableWrap=textEl('details','', 'chart-table-wrap',root);tableWrap.open=true;textEl('summary','Explore the data as a table','',tableWrap);
     const table=textEl('table','', 'chart-table',tableWrap);
@@ -143,6 +146,39 @@
       if(rows.length>8||columns.length>8)status.textContent='Showing the first 8 rows and columns. The table lists all '+filtered.length+' matching cells.';
       tableRows([presentation.yLabel||'Row',presentation.xLabel||'Column','Value','Note'],filtered.map(d=>[d.row,d.column,amount(d.value,unit),d.note||'']));
     }
+    function renderRadial(){
+      clear();radialLegend.replaceChildren();
+      const focused=controls.querySelector('[name="radial-focus"]').value;
+      const visible=data.slice(0,5),gradients=[['#4ed6ed',theme.primary],['#ffd027','#ff9f58'],['#06c9a0','#6be070'],['#fa6587','#d34fbc'],['#a786ef','#698ce3']];
+      const defs=svgEl('defs',{},svg),prefix='radial-'+(++radialInstance)+'-';
+      visible.forEach((d,i)=>{
+        const gradient=svgEl('linearGradient',{id:prefix+i,gradientUnits:'userSpaceOnUse',x1:100,y1:220,x2:460,y2:220},defs);
+        svgEl('stop',{offset:'0%','stop-color':gradients[i][0]},gradient);
+        svgEl('stop',{offset:'100%','stop-color':gradients[i][1]},gradient);
+      });
+      visible.forEach((d,i)=>{
+        const radius=174-i*35,circumference=2*Math.PI*radius,ratio=d.value/d.target;
+        const selected=focused===''||focused===String(i),description=d.label+' · '+amount(d.value,unit)+' of '+amount(d.target,unit)+' · '+(100*ratio).toFixed(1)+'% of target'+(d.note?' · '+d.note:'');
+        svgEl('circle',{cx:280,cy:220,r:radius,fill:'none',stroke:'#edf0f2','stroke-width':24,opacity:selected?1:.48},svg);
+        if(d.value>0){
+          const ring=svgEl('circle',{cx:280,cy:220,r:radius,fill:'none',stroke:'url(#'+prefix+i+')','stroke-width':24,'stroke-dasharray':Math.min(1,ratio)*circumference+' '+circumference,transform:'rotate(-90 280 220)',opacity:selected?1:.28},svg);
+          focusable(ring,description,description);
+          ring.addEventListener('click',()=>{controls.querySelector('[name="radial-focus"]').value=String(i);renderRadial();status.textContent=description;});
+        }
+        const item=textEl('button','','radial-legend-item',radialLegend);item.type='button';item.setAttribute('aria-pressed',String(focused===String(i)));
+        const swatch=textEl('span','','radial-swatch',item);swatch.style.background='linear-gradient(90deg,'+gradients[i].join(',')+')';swatch.setAttribute('aria-hidden','true');
+        textEl('span',d.label,'radial-legend-label',item);
+        textEl('span',(100*ratio).toFixed(1)+'%','radial-legend-value',item);
+        item.addEventListener('click',()=>{controls.querySelector('[name="radial-focus"]').value=focused===String(i)?'':String(i);renderRadial();status.textContent=description;});
+      });
+      if(focused!==''){
+        const d=visible[Number(focused)];
+        if(d){const pct=svgEl('text',{x:280,y:214,'text-anchor':'middle',fill:'#17283c','font-size':29,'font-weight':600},svg);pct.textContent=(100*d.value/d.target).toFixed(1)+'%';
+          const caption=svgEl('text',{x:280,y:238,'text-anchor':'middle',fill:'#65788c','font-size':12},svg);caption.textContent='of target';}
+      }
+      status.textContent=data.length>5?'Showing the first 5 rings. The table lists all '+data.length+' measures.':'Select a ring or legend item for its exact value and target.';
+      tableRows(['Measure','Value','Target','Of target','Note'],data.map(d=>[d.label,amount(d.value,unit),amount(d.target,unit),(100*d.value/d.target).toFixed(1)+'%',d.note||'']));
+    }
     if(templateId==='trend'){
       const label=textEl('span','Series: ','chart-label',controls);label.setAttribute('aria-hidden','true');
       for(const series of [...new Set(data.map(d=>d.series))]){const button=textEl('button',series,'chart-filter',controls);button.dataset.series=series;button.setAttribute('aria-pressed','true');button.addEventListener('click',()=>{button.setAttribute('aria-pressed',String(button.getAttribute('aria-pressed')!=='true'));renderTrend();});}
@@ -160,6 +196,11 @@
     } else if(templateId==='heatmap'){
       for(const [name,labelText] of [['row-search','Find row'],['column-search','Find column']]){const label=textEl('label',labelText,'chart-search-label',controls),field=document.createElement('input');field.type='search';field.name=name;field.placeholder='Search '+(name==='row-search'?'rows':'columns');field.addEventListener('input',renderHeatmap);label.appendChild(field);}
       const sortLabel=textEl('label','Row order','chart-sort-label',controls),sort=document.createElement('select');sort.name='row-sort';sort.innerHTML='<option value="source">Source order</option><option value="total">Highest total</option>';sort.addEventListener('change',renderHeatmap);sortLabel.appendChild(sort);renderHeatmap();
+    } else if(templateId==='radial'){
+      const label=textEl('label','Focus on','chart-sort-label',controls),select=document.createElement('select');select.name='radial-focus';
+      const all=document.createElement('option');all.value='';all.textContent='All measures';select.appendChild(all);
+      data.slice(0,5).forEach((d,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=d.label;select.appendChild(option);});
+      select.addEventListener('change',renderRadial);label.appendChild(select);renderRadial();
     }
     textEl('footer','Interactive snapshot · Values remain fixed until a new artifact is exported.','chart-footer',root);
   }

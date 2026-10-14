@@ -65,6 +65,17 @@ test('heatmap import retains signed cells and rejects repeated intersections',()
   assert.throws(()=>A.mapRows(A.parseTable('row,column,value\nA,B,1\na,b,2'),mapping,'heatmap',states),/repeated/);
 });
 
+test('radial progress import preserves ring order and checks values against positive targets',()=>{
+  const mapping={label:'label',value:'value',target:'target',note:'note'};
+  const data=A.mapRows(A.parseTable('label,value,target,note\nReach,125,100,over target\nMeetings,0,40,not started'),mapping,'radial',states).data;
+  assert.equal(data.map(row=>row.label).join(','),'Reach,Meetings');
+  assert.equal(data[0].value/data[0].target,1.25);
+  assert.equal(data[1].value,0);
+  assert.throws(()=>A.mapRows(A.parseTable('label,value,target\nA,-1,10'),mapping,'radial',states),/non-negative/);
+  assert.throws(()=>A.mapRows(A.parseTable('label,value,target\nA,1,0'),mapping,'radial',states),/positive/);
+  assert.throws(()=>A.mapRows(A.parseTable('label,value,target\nA,1,10\na,2,10'),mapping,'radial',states),/repeated/);
+});
+
 test('project validation preserves canonical data and rejects invalid files',()=>{
   const project={schemaVersion:1,templateId:'map',data:[{id:'a',name:'A',state:'CA',tier:1}],theme:{primary:'#3158d5',logo:''},presentation:{title:'Map',subtitle:'',source:'Source',unit:'',dataDate:''},sample:false};
   assert.equal(A.validateProject(JSON.parse(JSON.stringify(project)),states).data[0].state,'CA');
@@ -74,10 +85,13 @@ test('project validation preserves canonical data and rejects invalid files',()=
   const scatter={...project,templateId:'scatter',data:[{name:'A',x:3,y:4,size:1,segment:'Tier 1',note:''}]};
   assert.equal(A.validateProject(scatter,states).data[0].name,'A');
   assert.throws(()=>A.validateProject({...scatter,data:[{...scatter.data[0],size:-1}]},states),/size/);
+  const radial={...project,templateId:'radial',data:[{label:'Reach',value:125,target:100,note:''}]};
+  assert.equal(A.validateProject(radial,states).data[0].value,125);
+  assert.throws(()=>A.validateProject({...radial,data:[{...radial.data[0],target:0}]},states),/positive target/);
 });
 
 test('all bundled artifacts have inline code, a print rule, and parsable scripts',async()=>{
-  for(const path of ['dist/index.html','dist/account-map.html','dist/examples/trend.html','dist/examples/comparison.html','dist/examples/funnel.html','dist/examples/scatter.html','dist/examples/heatmap.html']){
+  for(const path of ['dist/index.html','dist/account-map.html','dist/examples/trend.html','dist/examples/comparison.html','dist/examples/funnel.html','dist/examples/scatter.html','dist/examples/heatmap.html','dist/examples/radial.html']){
     const html=await readFile(path,'utf8');assert.ok(html.includes('<!doctype html>'));
     assert.ok(!/<script[^>]+src=|<link[^>]+href=|\bfetch\s*\(/.test(html),path);
     assert.ok((html.match(/<\/script>/g)||[]).length===1,path);

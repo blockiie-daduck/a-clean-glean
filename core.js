@@ -66,7 +66,7 @@
     return match ? match.code : raw;
   }
   function mapRows(parsed, mapping, template, states) {
-    const requirements={map:['name','state','tier'],trend:['date','value'],comparison:['category','value'],funnel:['stage','value'],scatter:['name','x','y'],heatmap:['row','column','value']};
+    const requirements={map:['name','state','tier'],trend:['date','value'],comparison:['category','value'],funnel:['stage','value'],scatter:['name','x','y'],heatmap:['row','column','value'],radial:['label','value','target']};
     const required=requirements[template];
     if (!required) throw new Error('Unknown visual type.');
     for (const field of required) if (mapping[field] === undefined || !parsed.headers.includes(mapping[field])) throw new Error('Map the ' + field + ' column.');
@@ -118,6 +118,15 @@
         if (!valueText || !Number.isFinite(value)) { errors.push('Row '+rowNumber+': value must be a number.'); continue; }
         const key=JSON.stringify([row.toLowerCase(),column.toLowerCase()]); if (keys.has(key)) { errors.push('Row '+rowNumber+': row and column are repeated.'); continue; }
         keys.add(key); data.push({row,column,value,note:get('note')});
+      } else if (template === 'radial') {
+        const label=get('label'), valueText=get('value'), targetText=get('target');
+        const value=Number(valueText), target=Number(targetText);
+        if (!label) { errors.push('Row '+rowNumber+': ring label is empty.'); continue; }
+        if (!valueText || !Number.isFinite(value) || value<0) { errors.push('Row '+rowNumber+': value must be a non-negative number.'); continue; }
+        if (!targetText || !Number.isFinite(target) || target<=0) { errors.push('Row '+rowNumber+': target must be a positive number.'); continue; }
+        if (!Number.isFinite(100*(value/target))) { errors.push('Row '+rowNumber+': value is too large relative to target.'); continue; }
+        const key=label.toLowerCase(); if (keys.has(key)) { errors.push('Row '+rowNumber+': ring label is repeated.'); continue; }
+        keys.add(key); data.push({label,value,target,note:get('note')});
       }
     }
     if (errors.length) throw new Error(errors.slice(0,8).join(' ') + (errors.length>8?' '+(errors.length-8)+' more rows need correction.':''));
@@ -127,7 +136,7 @@
   }
   function validateProject(value, states) {
     if (!value || value.schemaVersion !== 1) throw new Error('This project file uses an unsupported version.');
-    if (!['map','trend','comparison','funnel','scatter','heatmap'].includes(value.templateId)) throw new Error('This project has an unknown visual type.');
+    if (!['map','trend','comparison','funnel','scatter','heatmap','radial'].includes(value.templateId)) throw new Error('This project has an unknown visual type.');
     if (!Array.isArray(value.data) || !value.data.length || value.data.length > 10000) throw new Error('Project data must contain 1–10,000 rows.');
     if (!value.theme || !/^#[0-9a-f]{6}$/i.test(value.theme.primary)) throw new Error('Project brand color must be a six-digit hex value.');
     if (value.theme.font && !['system','jakarta','serif','mono'].includes(value.theme.font)) throw new Error('Project font choice is unsupported.');
@@ -142,7 +151,8 @@
     if (value.templateId==='funnel' && value.data.some(row => typeof row.stage!=='string' || typeof row.value!=='number' || !Number.isFinite(row.value) || row.value<0)) throw new Error('Funnel project rows must have a stage and non-negative numeric value.');
     if (value.templateId==='scatter' && value.data.some(row => typeof row.name!=='string' || !Number.isFinite(row.x) || !Number.isFinite(row.y) || !Number.isFinite(row.size) || row.size<0 || typeof row.segment!=='string')) throw new Error('Scatterplot rows must have a name, numeric X/Y, size, and segment.');
     if (value.templateId==='heatmap' && value.data.some(row => typeof row.row!=='string' || typeof row.column!=='string' || !Number.isFinite(row.value))) throw new Error('Heatmap rows must have row, column, and numeric value.');
-    const headersByTemplate={map:['name','state','tier','id'],trend:['date','value','series','note'],comparison:['category','value','note'],funnel:['stage','value','note'],scatter:['name','x','y','size','segment','note'],heatmap:['row','column','value','note']};
+    if (value.templateId==='radial' && value.data.some(row => typeof row.label!=='string' || !Number.isFinite(row.value) || row.value<0 || !Number.isFinite(row.target) || row.target<=0 || !Number.isFinite(100*(row.value/row.target)))) throw new Error('Radial progress rows must have a label, non-negative value, and positive target with a finite ratio.');
+    const headersByTemplate={map:['name','state','tier','id'],trend:['date','value','series','note'],comparison:['category','value','note'],funnel:['stage','value','note'],scatter:['name','x','y','size','segment','note'],heatmap:['row','column','value','note'],radial:['label','value','target','note']};
     const headers=headersByTemplate[value.templateId];
     const parsed = {headers,rows:value.data.map(row=>headers.map(h=>String(row[h]??'')))};
     const checked=mapRows(parsed,Object.fromEntries(headers.map(h=>[h,h])),value.templateId,states).data;

@@ -21,6 +21,7 @@ const comparison=[['Security',82],['Operations',66],['Finance',49],['Product',73
 const funnel=[['Identified',520],['Engaged',310],['Qualified',156],['Opportunity',64],['Customer',18]].map(([stage,value])=>({stage,value,note:''}));
 const scatter=[['Acme West',82,75,24,'Tier 1'],['Northstar',69,88,16,'Tier 1'],['Bluebird',45,63,10,'Tier 2'],['Cedar Works',77,43,12,'Tier 2'],['Evergreen',35,29,7,'Tier 3'],['Harbor Labs',55,52,9,'Tier 3'],['Redstone',92,67,20,'Tier 1']].map(([name,x,y,size,segment])=>({name,x,y,size,segment,note:''}));
 const heatmap=[['Enterprise','Security',42],['Enterprise','Operations',31],['Enterprise','Finance',19],['Mid-market','Security',35],['Mid-market','Operations',27],['Mid-market','Finance',14],['Growth','Security',24],['Growth','Operations',18],['Growth','Finance',9]].map(([row,column,value])=>({row,column,value,note:''}));
+const radial=[['Target accounts engaged',100,100],['Campaign reach',78,100],['Meetings booked',63,100],['Opportunities created',48,100]].map(([label,value,target])=>({label,value,target,note:''}));
 const assets={core,mapJS,chartJS,mapCSS,chartCSS,fontCSS,mapLicense,states};
 const builder=builderShell.replace('</body>','<!-- '+mapLicense.replace(/--/g,'—')+' --></body>').replace('/* BUILDER_CSS */',fontCSS+builderCSS).replace('/* BUILDER_SCRIPT */',core+'\nwindow.BuilderAssets='+safe(assets)+';\n'+builderJS);
 await mkdir('dist',{recursive:true});await mkdir('dist/examples',{recursive:true});
@@ -31,6 +32,7 @@ await Promise.all([
   writeFile('dist/examples/comparison.html',standalone('comparison',comparison,'How categories compare','Sort and search the ranked values.','Synthetic example · no live connection')),
   writeFile('dist/examples/funnel.html',standalone('funnel',funnel,'How accounts move through the funnel','Explore stage totals and conversion from the previous stage.','Synthetic example · no live connection')),
   writeFile('dist/examples/scatter.html',standalone('scatter',scatter,'Which accounts deserve attention','Compare fit and intent across target accounts.','Synthetic example · no live connection')),
-  writeFile('dist/examples/heatmap.html',standalone('heatmap',heatmap,'Where activity concentrates','Explore intersections between two dimensions.','Synthetic example · no live connection'))
+  writeFile('dist/examples/heatmap.html',standalone('heatmap',heatmap,'Where activity concentrates','Explore intersections between two dimensions.','Synthetic example · no live connection')),
+  writeFile('dist/examples/radial.html',standalone('radial',radial,'Progress toward key targets','Select a ring to inspect its value and share of target.','Synthetic example · no live connection'))
 ]);
-console.log('Built visual builder and six standalone examples ('+states.length+' state/DC geometries).');
+console.log('Built visual builder and seven standalone examples ('+states.length+' state/DC geometries).');
