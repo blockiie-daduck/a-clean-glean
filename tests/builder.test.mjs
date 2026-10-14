@@ -46,6 +46,15 @@ test('funnel import preserves stage order and rejects invalid values or repeated
   assert.throws(()=>A.mapRows(A.parseTable('stage,value\nA,2\na,1'),mapping,'funnel',states),/repeated/);
 });
 
+test('sales and marketing funnel keeps stage order and canonical team names',()=>{
+  const mapping={stage:'stage',value:'value',phase:'phase'};
+  const data=A.mapRows(A.parseTable('stage,value,phase\nReached,100,Marketing\nEngaged,80,marketing\nSales accepted,40,Sales'),mapping,'journey',states).data;
+  assert.equal(data.map(row=>row.stage).join(','),'Reached,Engaged,Sales accepted');
+  assert.equal(data[1].phase,'Marketing');
+  assert.throws(()=>A.mapRows(A.parseTable('stage,value\nA,-2'),{stage:'stage',value:'value'},'journey',states),/non-negative/);
+  assert.throws(()=>A.mapRows(A.parseTable('stage,value\nA,2\na,1'),{stage:'stage',value:'value'},'journey',states),/repeated/);
+});
+
 test('scatter import keeps signed axes and rejects duplicate accounts or negative size',()=>{
   const mapping={name:'name',x:'x',y:'y',size:'size',segment:'segment'};
   const data=A.mapRows(A.parseTable('name,x,y,size,segment\nA,-2,4,0,Priority\nB,3,-5,,Watch'),mapping,'scatter',states).data;
@@ -88,10 +97,13 @@ test('project validation preserves canonical data and rejects invalid files',()=
   const radial={...project,templateId:'radial',data:[{label:'Reach',value:125,target:100,note:''}]};
   assert.equal(A.validateProject(radial,states).data[0].value,125);
   assert.throws(()=>A.validateProject({...radial,data:[{...radial.data[0],target:0}]},states),/positive target/);
+  const journey={...project,templateId:'journey',data:[{stage:'Reached',value:100,phase:'Marketing',note:''}]};
+  assert.equal(A.validateProject(journey,states).data[0].phase,'Marketing');
+  assert.throws(()=>A.validateProject({...journey,data:[{...journey.data[0],value:-1}]},states),/non-negative/);
 });
 
 test('all bundled artifacts have inline code, a print rule, and parsable scripts',async()=>{
-  for(const path of ['dist/index.html','dist/account-map.html','dist/examples/trend.html','dist/examples/comparison.html','dist/examples/funnel.html','dist/examples/scatter.html','dist/examples/heatmap.html','dist/examples/radial.html']){
+  for(const path of ['dist/index.html','dist/account-map.html','dist/examples/trend.html','dist/examples/comparison.html','dist/examples/funnel.html','dist/examples/journey.html','dist/examples/scatter.html','dist/examples/heatmap.html','dist/examples/radial.html']){
     const html=await readFile(path,'utf8');assert.ok(html.includes('<!doctype html>'));
     assert.ok(!/<script[^>]+src=|<link[^>]+href=|\bfetch\s*\(/.test(html),path);
     assert.ok((html.match(/<\/script>/g)||[]).length===1,path);
