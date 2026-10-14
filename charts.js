@@ -2,6 +2,38 @@
   'use strict';
   const NS='http://www.w3.org/2000/svg';
   let radialInstance=0;
+  function primaryHsl(primary){
+    const [r,g,b]=[1,3,5].map(i=>parseInt(primary.slice(i,i+2),16)/255);
+    const high=Math.max(r,g,b),low=Math.min(r,g,b),range=high-low,lightness=(high+low)/2;
+    const saturation=range===0?0:range/(1-Math.abs(2*lightness-1));
+    let hue=0;
+    if(range){
+      if(high===r)hue=((g-b)/range)%6;
+      else if(high===g)hue=(b-r)/range+2;
+      else hue=(r-g)/range+4;
+      hue=(hue*60+360)%360;
+    }
+    return {hue,saturation,lightness};
+  }
+  function radialPalette(primary){
+    const {hue,saturation,lightness}=primaryHsl(primary);
+    const center=Math.max(.43,Math.min(.56,lightness));
+    const levels=[center,Math.min(.79,center+.21),Math.max(.27,center-.17),Math.min(.74,center+.10),Math.min(.83,center+.29)];
+    const shifts=[0,-6,6,-3,3],strength=saturation===0?0:Math.max(.45,Math.min(.83,saturation));
+    return levels.map((level,i)=>{
+      const color=l=>'hsl('+Math.round((hue+shifts[i]+360)%360)+', '+Math.round(strength*100)+'%, '+Math.round(l*100)+'%)';
+      return [color(Math.min(.88,level+.065)),i===0?primary:color(Math.max(.22,level-.065))];
+    });
+  }
+  function journeyPalette(primary,count){
+    const {hue,saturation}=primaryHsl(primary),strength=saturation===0?0:Math.max(.62,Math.min(.84,saturation));
+    return Array.from({length:count},(_,i)=>{
+      const fraction=count===1?0:i/(count-1),angle=(hue+30-125*fraction+360)%360;
+      const base=[.62,.60,.51,.49,.56,.58][i];
+      const color=lightness=>'hsl('+Math.round(angle)+', '+Math.round(strength*100)+'%, '+Math.round(lightness*100)+'%)';
+      return [color(Math.min(.82,base+.10)),i===1||count===1?primary:color(Math.max(.28,base-.03))];
+    });
+  }
   function svgEl(tag, attrs, parent) { const el=document.createElementNS(NS,tag);for(const [name,value] of Object.entries(attrs))el.setAttribute(name,String(value));parent.appendChild(el);return el; }
   function textEl(tag,text,klass,parent) { const el=document.createElement(tag);if(klass)el.className=klass;el.textContent=text;parent.appendChild(el);return el; }
   function amount(value,unit){return new Intl.NumberFormat(undefined,{maximumFractionDigits:2}).format(value)+(unit?' '+unit:'');}
@@ -10,7 +42,7 @@
     root.replaceChildren();root.className='chart-export';root.style.setProperty('--visual-primary',theme.primary);
     root.style.fontFamily=theme.font==='jakarta'?'"Plus Jakarta Sans",ui-sans-serif,sans-serif':theme.font==='serif'?'Georgia,serif':theme.font==='mono'?'ui-monospace,Menlo,Consolas,monospace':'ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
     const header=textEl('header','',null,root);header.textContent='';
-    const visualNames={trend:'Trend chart',comparison:'Ranked comparison',funnel:'Pipeline funnel',scatter:'Account scatterplot',heatmap:'Category heatmap',radial:'Radial progress rings'};
+    const visualNames={trend:'Trend chart',comparison:'Ranked comparison',funnel:'Pipeline funnel',journey:'Sales & marketing funnel',scatter:'Account scatterplot',heatmap:'Category heatmap',radial:'Radial progress rings'};
     textEl('div','A Clean Glean / '+visualNames[templateId],'chart-eyebrow',header);
     if(theme.logo){const logo=document.createElement('img');logo.src=theme.logo;logo.alt='Brand logo';logo.className='chart-logo';header.appendChild(logo);}
     textEl('h1',presentation.title,'',header);textEl('p',presentation.subtitle,'chart-subtitle',header);
@@ -19,7 +51,8 @@
     const controls=textEl('div','', 'chart-controls',root);
     const figure=textEl('section','', 'chart-panel',root);figure.setAttribute('aria-label',visualNames[templateId]);
     if(templateId==='radial')figure.classList.add('radial-panel');
-    const svg=svgEl('svg',{viewBox:templateId==='radial'?'0 0 560 440':'0 0 900 430',role:templateId==='radial'?'group':'img','aria-label':'Interactive chart. Use the data table below to inspect exact values.'},figure);
+    if(templateId==='journey')figure.classList.add('journey-panel');
+    const svg=svgEl('svg',{viewBox:templateId==='radial'?'0 0 560 440':templateId==='journey'?'0 0 900 520':'0 0 900 430',role:['radial','journey'].includes(templateId)?'group':'img','aria-label':'Interactive chart. Use the data table below to inspect exact values.'},figure);
     const radialLegend=templateId==='radial'?textEl('div','','radial-legend',figure):null;
     const status=textEl('p','Select a mark or table row for details.','chart-detail',root);status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     const tableWrap=textEl('details','', 'chart-table-wrap',root);tableWrap.open=true;textEl('summary','Explore the data as a table','',tableWrap);
@@ -91,6 +124,39 @@
       if(data.length>8)status.textContent='Showing the first 8 stages in the chart. The table lists all '+data.length+'.';
       tableRows(['Stage','Value','Vs previous','Vs first','Note'],data.map((d,i)=>[d.stage,amount(d.value,unit),i===0?'Starting stage':data[i-1].value?(100*d.value/data[i-1].value).toFixed(1)+'%':'No prior base',first?(100*d.value/first).toFixed(1)+'%':'No starting base',d.note||'']));
     }
+    function renderJourney(){
+      clear();
+      const visible=data.slice(0,6),focused=controls.querySelector('[name="journey-focus"]').value;
+      const colors=journeyPalette(theme.primary,visible.length),defs=svgEl('defs',{},svg),prefix='journey-'+(++radialInstance)+'-';
+      const pitch=Math.min(86,430/visible.length),height=pitch-7,startY=40,centerX=280,nodeX=615;
+      visible.forEach((d,i)=>{
+        const gradient=svgEl('linearGradient',{id:prefix+i,x1:'0%',y1:'0%',x2:'100%',y2:'100%'},defs);
+        svgEl('stop',{offset:'0%','stop-color':colors[i][0]},gradient);
+        svgEl('stop',{offset:'100%','stop-color':colors[i][1]},gradient);
+      });
+      if(visible.length>1)svgEl('line',{x1:nodeX,y1:startY+height/2,x2:nodeX,y2:startY+(visible.length-1)*pitch+height/2,stroke:'#e0e8f1','stroke-width':18,'stroke-linecap':'round'},svg);
+      visible.forEach((d,i)=>{
+        const y=startY+i*pitch,topWidth=460-(visible.length===1?0:i*220/(visible.length-1)),bottomWidth=topWidth-52;
+        const leftTop=centerX-topWidth/2,rightTop=centerX+topWidth/2,leftBottom=centerX-bottomWidth/2,rightBottom=centerX+bottomWidth/2;
+        const path='M '+(leftTop+16)+' '+y+' L '+(rightTop-16)+' '+y+' Q '+rightTop+' '+y+' '+(rightTop-7)+' '+(y+16)+' L '+(rightBottom+4)+' '+(y+height-15)+' Q '+rightBottom+' '+(y+height)+' '+(rightBottom-14)+' '+(y+height)+' L '+(leftBottom+14)+' '+(y+height)+' Q '+leftBottom+' '+(y+height)+' '+(leftBottom-4)+' '+(y+height-15)+' L '+(leftTop+7)+' '+(y+16)+' Q '+leftTop+' '+y+' '+(leftTop+16)+' '+y+' Z';
+        const previous=i?data[i-1].value:null,conversion=previous===null?'Starting stage':previous===0?'No prior base':(100*d.value/previous).toFixed(1)+'% of previous';
+        const description=d.stage+' · '+d.phase+' · '+amount(d.value,unit)+' · '+conversion+(d.note?' · '+d.note:'');
+        const selected=focused===''||focused===String(i),select=()=>{controls.querySelector('[name="journey-focus"]').value=String(i);renderJourney();status.textContent=description;};
+        const band=svgEl('path',{d:path,fill:'url(#'+prefix+i+')',opacity:selected?1:.30},svg);focusable(band,description,description);band.addEventListener('click',select);
+        band.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});
+        const cy=y+height/2,node=svgEl('circle',{cx:nodeX,cy,r:26,fill:colors[i][1],opacity:selected?1:.4,stroke:'#fff','stroke-width':2},svg);
+        focusable(node,description,description);node.addEventListener('click',select);
+        node.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});
+        const number=svgEl('text',{x:nodeX,y:cy+5,'text-anchor':'middle',fill:'#fff','font-size':15,'font-weight':600,'pointer-events':'none'},svg);number.textContent=String(i+1);
+        const phase=svgEl('text',{x:657,y:cy-16,fill:'#62748a','font-size':11},svg);phase.textContent=d.phase==='Unassigned'?'Stage '+(i+1):d.phase;
+        const name=svgEl('text',{x:657,y:cy+3,fill:'#17283c','font-size':14,'font-weight':600},svg);name.textContent=d.stage.length>26?d.stage.slice(0,25)+'…':d.stage;
+        const value=svgEl('text',{x:657,y:cy+21,fill:'#50657e','font-size':11},svg);value.textContent=amount(d.value,unit)+' · '+conversion;
+      });
+      axisLabel(450,505,'Band widths show stage order; use the values and table for quantitative comparison.');
+      status.textContent=data.length>6?'Showing the first 6 stages. The table lists all '+data.length+'.':'Select a funnel stage or numbered marker for details.';
+      const first=data[0].value;
+      tableRows(['Stage','Phase','Value','Vs previous','Vs first','Note'],data.map((d,i)=>[d.stage,d.phase,amount(d.value,unit),i===0?'Starting stage':data[i-1].value?(100*d.value/data[i-1].value).toFixed(1)+'%':'No prior base',first?(100*d.value/first).toFixed(1)+'%':'No starting base',d.note||'']));
+    }
     function renderScatter(){
       clear();const query=controls.querySelector('[name="account-search"]').value.trim().toLowerCase();
       const xInput=controls.querySelector('[name="min-x"]').value,yInput=controls.querySelector('[name="min-y"]').value;
@@ -149,7 +215,7 @@
     function renderRadial(){
       clear();radialLegend.replaceChildren();
       const focused=controls.querySelector('[name="radial-focus"]').value;
-      const visible=data.slice(0,5),gradients=[['#4ed6ed',theme.primary],['#ffd027','#ff9f58'],['#06c9a0','#6be070'],['#fa6587','#d34fbc'],['#a786ef','#698ce3']];
+      const visible=data.slice(0,5),gradients=radialPalette(theme.primary);
       const defs=svgEl('defs',{},svg),prefix='radial-'+(++radialInstance)+'-';
       visible.forEach((d,i)=>{
         const gradient=svgEl('linearGradient',{id:prefix+i,gradientUnits:'userSpaceOnUse',x1:100,y1:220,x2:460,y2:220},defs);
@@ -189,6 +255,11 @@
       const searchLabel=textEl('label','Find category','chart-search-label',controls),input=document.createElement('input');input.type='search';input.name='category-search';input.placeholder='Search categories';input.addEventListener('input',renderComparison);searchLabel.appendChild(input);renderComparison();
     } else if(templateId==='funnel'){
       const label=textEl('label','Show','chart-sort-label',controls),select=document.createElement('select');select.name='funnel-metric';select.innerHTML='<option value="count">Stage values</option><option value="conversion">Conversion from previous</option>';select.addEventListener('change',renderFunnel);label.appendChild(select);renderFunnel();
+    } else if(templateId==='journey'){
+      const label=textEl('label','Focus on stage','chart-sort-label',controls),select=document.createElement('select');select.name='journey-focus';
+      const all=document.createElement('option');all.value='';all.textContent='All stages';select.appendChild(all);
+      data.slice(0,6).forEach((d,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=d.stage;select.appendChild(option);});
+      select.addEventListener('change',renderJourney);label.appendChild(select);renderJourney();
     } else if(templateId==='scatter'){
       for(const segment of [...new Set(data.map(d=>d.segment))]){const button=textEl('button',segment,'chart-filter',controls);button.dataset.segment=segment;button.setAttribute('aria-pressed','true');button.addEventListener('click',()=>{button.setAttribute('aria-pressed',String(button.getAttribute('aria-pressed')!=='true'));renderScatter();});}
       const search=textEl('label','Find account','chart-search-label',controls),input=document.createElement('input');input.type='search';input.name='account-search';input.placeholder='Search accounts';input.addEventListener('input',renderScatter);search.appendChild(input);

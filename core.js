@@ -66,13 +66,13 @@
     return match ? match.code : raw;
   }
   function mapRows(parsed, mapping, template, states) {
-    const requirements={map:['name','state','tier'],trend:['date','value'],comparison:['category','value'],funnel:['stage','value'],scatter:['name','x','y'],heatmap:['row','column','value'],radial:['label','value','target']};
+    const requirements={map:['name','state','tier'],trend:['date','value'],comparison:['category','value'],funnel:['stage','value'],scatter:['name','x','y'],heatmap:['row','column','value'],radial:['label','value','target'],journey:['stage','value']};
     const required=requirements[template];
     if (!required) throw new Error('Unknown visual type.');
     for (const field of required) if (mapping[field] === undefined || !parsed.headers.includes(mapping[field])) throw new Error('Map the ' + field + ' column.');
     const indices = Object.fromEntries(Object.entries(mapping).map(([key, header]) => [key, parsed.headers.indexOf(header)]));
     const data = [], errors = [], warnings = [], keys = new Set();
-    const labels={row:new Map(),column:new Map(),segment:new Map()};
+    const labels={row:new Map(),column:new Map(),segment:new Map(),phase:new Map()};
     const canonical=(kind,raw)=>{const key=raw.toLowerCase();if(!labels[kind].has(key))labels[kind].set(key,raw);return labels[kind].get(key);};
     for (let i = 0; i < parsed.rows.length; i++) {
       const source = parsed.rows[i], rowNumber = i + 2, get = field => indices[field] < 0 || indices[field] === undefined ? '' : source[indices[field]];
@@ -127,6 +127,12 @@
         if (!Number.isFinite(100*(value/target))) { errors.push('Row '+rowNumber+': value is too large relative to target.'); continue; }
         const key=label.toLowerCase(); if (keys.has(key)) { errors.push('Row '+rowNumber+': ring label is repeated.'); continue; }
         keys.add(key); data.push({label,value,target,note:get('note')});
+      } else if (template === 'journey') {
+        const stage=get('stage'), valueText=get('value'), value=Number(valueText);
+        if (!stage) { errors.push('Row '+rowNumber+': stage is empty.'); continue; }
+        if (!valueText || !Number.isFinite(value) || value<0) { errors.push('Row '+rowNumber+': value must be a non-negative number.'); continue; }
+        const key=stage.toLowerCase(); if (keys.has(key)) { errors.push('Row '+rowNumber+': stage is repeated.'); continue; }
+        keys.add(key); data.push({stage,value,phase:canonical('phase',get('phase')||'Unassigned'),note:get('note')});
       }
     }
     if (errors.length) throw new Error(errors.slice(0,8).join(' ') + (errors.length>8?' '+(errors.length-8)+' more rows need correction.':''));
@@ -136,7 +142,7 @@
   }
   function validateProject(value, states) {
     if (!value || value.schemaVersion !== 1) throw new Error('This project file uses an unsupported version.');
-    if (!['map','trend','comparison','funnel','scatter','heatmap','radial'].includes(value.templateId)) throw new Error('This project has an unknown visual type.');
+    if (!['map','trend','comparison','funnel','scatter','heatmap','radial','journey'].includes(value.templateId)) throw new Error('This project has an unknown visual type.');
     if (!Array.isArray(value.data) || !value.data.length || value.data.length > 10000) throw new Error('Project data must contain 1–10,000 rows.');
     if (!value.theme || !/^#[0-9a-f]{6}$/i.test(value.theme.primary)) throw new Error('Project brand color must be a six-digit hex value.');
     if (value.theme.font && !['system','jakarta','serif','mono'].includes(value.theme.font)) throw new Error('Project font choice is unsupported.');
@@ -152,12 +158,14 @@
     if (value.templateId==='scatter' && value.data.some(row => typeof row.name!=='string' || !Number.isFinite(row.x) || !Number.isFinite(row.y) || !Number.isFinite(row.size) || row.size<0 || typeof row.segment!=='string')) throw new Error('Scatterplot rows must have a name, numeric X/Y, size, and segment.');
     if (value.templateId==='heatmap' && value.data.some(row => typeof row.row!=='string' || typeof row.column!=='string' || !Number.isFinite(row.value))) throw new Error('Heatmap rows must have row, column, and numeric value.');
     if (value.templateId==='radial' && value.data.some(row => typeof row.label!=='string' || !Number.isFinite(row.value) || row.value<0 || !Number.isFinite(row.target) || row.target<=0 || !Number.isFinite(100*(row.value/row.target)))) throw new Error('Radial progress rows must have a label, non-negative value, and positive target with a finite ratio.');
-    const headersByTemplate={map:['name','state','tier','id'],trend:['date','value','series','note'],comparison:['category','value','note'],funnel:['stage','value','note'],scatter:['name','x','y','size','segment','note'],heatmap:['row','column','value','note'],radial:['label','value','target','note']};
+    if (value.templateId==='journey' && value.data.some(row => typeof row.stage!=='string' || !Number.isFinite(row.value) || row.value<0 || typeof row.phase!=='string')) throw new Error('Sales and marketing funnel rows must have a stage, non-negative value, and phase.');
+    const headersByTemplate={map:['name','state','tier','id'],trend:['date','value','series','note'],comparison:['category','value','note'],funnel:['stage','value','note'],scatter:['name','x','y','size','segment','note'],heatmap:['row','column','value','note'],radial:['label','value','target','note'],journey:['stage','value','phase','note']};
     const headers=headersByTemplate[value.templateId];
     const parsed = {headers,rows:value.data.map(row=>headers.map(h=>String(row[h]??'')))};
     const checked=mapRows(parsed,Object.fromEntries(headers.map(h=>[h,h])),value.templateId,states).data;
     if (value.templateId==='scatter' && value.data.some((row,i)=>row.segment!==checked[i].segment)) throw new Error('Scatterplot segments must use consistent capitalization.');
     if (value.templateId==='heatmap' && value.data.some((row,i)=>row.row!==checked[i].row || row.column!==checked[i].column)) throw new Error('Heatmap categories must use consistent capitalization.');
+    if (value.templateId==='journey' && value.data.some((row,i)=>row.phase!==checked[i].phase)) throw new Error('Sales and marketing phases must use consistent capitalization.');
     return value;
   }
   global.AccountMap = {serialize,summarize,scaleMax,sampleAccounts,parseTable,normalizeState,mapRows,validateProject};
