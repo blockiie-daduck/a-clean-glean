@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
+const context={};vm.runInNewContext(await readFile('core.js','utf8'),context);
+const map=context.AccountMap;
+const states=JSON.parse(await readFile('assets/states.json','utf8'));
+const data=[{state:'CA',tier:1},{state:'CA',tier:2},{state:'DC',tier:1},{state:'AK',tier:4},{state:'HI',tier:3},{state:'Canada',tier:2},{state:'',tier:1}];
+test('geometry covers 50 states and DC with genuine paths',()=>{assert.equal(states.length,51);assert.equal(new Set(states.map(s=>s.code)).size,51);for(const state of states)assert.match(state.path,/^M.+Z$/);});
+test('counts reconcile mapped, outside-US, and unknown records',()=>{const s=map.summarize(data,states,[1,2,3,4]);assert.equal(s.total,7);assert.equal(s.mapped,5);assert.equal(s.outside,1);assert.equal(s.unknown,1);assert.equal(s.counts.CA,2);assert.equal(s.counts.DC,1);assert.equal(s.total,s.mapped+s.outside+s.unknown);});
+test('tier selection and no-selection produce exact totals',()=>{const s=map.summarize(data,states,[1]);assert.equal(s.total,3);assert.equal(s.counts.CA,1);assert.equal(s.unknown,1);assert.equal(map.summarize(data,states,[]).total,0);});
+test('fixed concentration scale handles empty data',()=>{assert.equal(map.scaleMax(data,states),2);assert.equal(map.scaleMax([],states),1);});
+test('export serialization keeps script-like text inert and round trips',()=>{const payload={name:'</script><script>alert(1)</script>&\u2028'};const safe=map.serialize(payload);assert.ok(!safe.includes('<'));assert.ok(!safe.includes('&'));assert.deepEqual(JSON.parse(safe),payload);});
+test('standalone export has no runtime network or module dependencies',async()=>{const html=await readFile('dist/account-map.html','utf8');assert.ok(html.includes('mountAccountMap'));assert.ok(html.includes('Synthetic sample data'));assert.ok(!/<script[^>]+src=/.test(html));assert.ok(!/<link[^>]+href=/.test(html));assert.ok(!/\bfetch\s*\(/.test(html));});

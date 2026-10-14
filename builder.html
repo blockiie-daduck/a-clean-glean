@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>A Clean Glean · Interactive visual builder</title><style>/* BUILDER_CSS */</style></head>
+<body class="builder-page">
+<header class="builder-top"><div><div class="builder-brand">A Clean Glean</div><h1>Interactive visual builder</h1><p>Turn a table into a self-contained visual for Glean Canvas.</p></div><span class="top-tag">Local · no data connection</span></header>
+<main class="builder-layout">
+  <aside class="builder-card builder-sidebar"><div class="builder-section-label">1 · Choose a visual</div><h2>Visual library</h2>
+    <button class="template-button" data-template="map" aria-pressed="true"><strong>US account map</strong><small>State coverage, tiers, account details</small></button>
+    <button class="template-button" data-template="trend" aria-pressed="false"><strong>Trend chart</strong><small>Dates, series, exact point values</small></button>
+    <button class="template-button" data-template="comparison" aria-pressed="false"><strong>Ranked bars</strong><small>Category ranking and search</small></button>
+    <p class="sidebar-note">The exported visual is a snapshot. Filters work in Glean Canvas, but changing source data requires a new export.</p>
+  </aside>
+  <section class="builder-card builder-editor" aria-label="Build a visual">
+    <div class="step"><div class="step-title"><span class="step-number">2</span><h2>Supply data</h2></div><p id="format-hint"></p><p><strong id="data-count"></strong></p>
+      <label for="import-input">Choose a CSV or TSV file<input id="import-input" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values"></label>
+      <label for="paste-table">Or paste a table<textarea id="paste-table" placeholder="Paste column headers and rows here"></textarea></label>
+      <div class="button-row"><button class="secondary-button" id="parse-import">Map columns</button><button class="secondary-button" id="load-sample">Restore sample</button></div>
+      <div id="column-mapping"></div><button class="primary-button" id="apply-import" hidden>Apply imported data</button>
+      <div id="duplicate-review" class="review-box" hidden><strong>Possible duplicates</strong><p id="duplicate-messages"></p><div class="button-row"><button class="secondary-button" id="keep-duplicates">Keep all rows</button><button class="secondary-button" id="remove-duplicates">Remove later duplicates</button></div></div>
+    </div>
+    <div class="step"><div class="step-title"><span class="step-number">3</span><h2>Describe the visual</h2></div>
+      <label for="field-title">Title<input id="field-title" type="text" maxlength="140"></label>
+      <label for="field-subtitle">Subtitle<input id="field-subtitle" type="text" maxlength="240"></label>
+      <label for="field-source">Source note<input id="field-source" type="text" maxlength="240"></label>
+      <div class="field-grid"><label for="field-dataDate">Data date<input id="field-dataDate" type="date"></label><label id="unit-row" for="field-unit">Unit<input id="field-unit" type="text" maxlength="40" placeholder="e.g. accounts, $M"></label></div>
+    </div>
+    <div class="step"><div class="step-title"><span class="step-number">4</span><h2>Apply a brand</h2></div>
+      <label for="field-primary">Primary color<div class="color-row"><input id="field-primary" type="color"><span id="color-code"></span></div></label>
+      <label for="field-font">Font family<select id="field-font"><option value="system">System sans-serif</option><option value="jakarta">Plus Jakarta Sans</option><option value="serif">System serif</option><option value="mono">System monospace</option></select></label>
+      <label for="logo-file">Optional PNG or JPEG logo, under 1 MB<input id="logo-file" type="file" accept="image/png,image/jpeg"></label><span class="small-note" id="logo-name"></span>
+      <div class="button-row"><button class="secondary-button" id="clear-logo">Clear logo</button><button class="secondary-button" id="save-brand">Save brand preset</button><label class="file-button" for="open-brand">Open brand preset<input id="open-brand" type="file" accept=".json,application/json"></label></div>
+    </div>
+    <div class="step export-block"><div class="step-title"><span class="step-number">5</span><h2>Save or hand off</h2></div>
+      <div class="button-row"><button class="primary-button" id="download-html">Download HTML</button><button class="secondary-button" id="copy-html">Copy HTML</button></div>
+      <div class="button-row"><button class="secondary-button" id="save-project">Save editable project</button><label class="file-button" for="open-project">Open project<input id="open-project" type="file" accept=".json,application/json"></label></div>
+      <p>To ask Glean to populate a visual, start with a synthetic sample and verify the returned data and interactions.</p>
+      <div class="button-row"><button class="secondary-button" id="download-template">Download sample HTML</button><button class="secondary-button" id="copy-prompt">Copy Glean prompt</button><button class="secondary-button" id="show-prompt">Show prompt</button></div><textarea id="prompt-text" class="prompt-text" readonly hidden></textarea>
+    </div>
+  </section>
+  <section class="builder-card builder-preview"><div class="preview-head"><div><div class="builder-section-label">Live preview</div><h2 id="visual-name">US account map</h2><p id="preview-caption"></p></div></div><iframe class="preview-frame" id="preview" title="Interactive visual preview" sandbox="allow-scripts"></iframe></section>
+</main><p class="status" id="status" role="status" aria-live="polite"></p>
+<script>/* BUILDER_SCRIPT */</script>
+</body></html>
