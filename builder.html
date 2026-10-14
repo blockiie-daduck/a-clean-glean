@@ -8,6 +8,9 @@
     <button class="template-button" data-template="map" aria-pressed="true"><strong>US account map</strong><small>State coverage, tiers, account details</small></button>
     <button class="template-button" data-template="trend" aria-pressed="false"><strong>Trend chart</strong><small>Dates, series, exact point values</small></button>
     <button class="template-button" data-template="comparison" aria-pressed="false"><strong>Ranked bars</strong><small>Category ranking and search</small></button>
+    <button class="template-button" data-template="funnel" aria-pressed="false"><strong>Pipeline funnel</strong><small>Stage conversion and drop-off</small></button>
+    <button class="template-button" data-template="scatter" aria-pressed="false"><strong>Account scatterplot</strong><small>Two measures, segments, bubble size</small></button>
+    <button class="template-button" data-template="heatmap" aria-pressed="false"><strong>Category heatmap</strong><small>Values across two dimensions</small></button>
     <p class="sidebar-note">The exported visual is a snapshot. Filters work in Glean Canvas, but changing source data requires a new export.</p>
   </aside>
   <section class="builder-card builder-editor" aria-label="Build a visual">
@@ -23,6 +26,7 @@
       <label for="field-subtitle">Subtitle<input id="field-subtitle" type="text" maxlength="240"></label>
       <label for="field-source">Source note<input id="field-source" type="text" maxlength="240"></label>
       <div class="field-grid"><label for="field-dataDate">Data date<input id="field-dataDate" type="date"></label><label id="unit-row" for="field-unit">Unit<input id="field-unit" type="text" maxlength="40" placeholder="e.g. accounts, $M"></label></div>
+      <div class="field-grid" id="axis-row" hidden><label for="field-xLabel">Horizontal label<input id="field-xLabel" type="text" maxlength="60"></label><label for="field-yLabel">Vertical label<input id="field-yLabel" type="text" maxlength="60"></label></div>
     </div>
     <div class="step"><div class="step-title"><span class="step-number">4</span><h2>Apply a brand</h2></div>
       <label for="field-primary">Primary color<div class="color-row"><input id="field-primary" type="color"><span id="color-code"></span></div></label>
@@ -37,7 +41,7 @@
       <div class="button-row"><button class="secondary-button" id="download-template">Download sample HTML</button><button class="secondary-button" id="copy-prompt">Copy Glean prompt</button><button class="secondary-button" id="show-prompt">Show prompt</button></div><textarea id="prompt-text" class="prompt-text" readonly hidden></textarea>
     </div>
   </section>
-  <section class="builder-card builder-preview"><div class="preview-head"><div><div class="builder-section-label">Live preview</div><h2 id="visual-name">US account map</h2><p id="preview-caption"></p></div></div><iframe class="preview-frame" id="preview" title="Interactive visual preview" sandbox="allow-scripts"></iframe></section>
+  <section class="builder-card builder-preview"><div class="preview-head"><div><div class="builder-section-label">Live preview</div><h2 id="visual-name">US account map</h2><p id="preview-caption"></p></div><button class="secondary-button preview-toggle" id="toggle-preview" aria-expanded="false">Expand preview</button></div><iframe class="preview-frame" id="preview" title="Interactive visual preview" sandbox="allow-scripts"></iframe></section>
 </main><p class="status" id="status" role="status" aria-live="polite"></p>
 <script>/* BUILDER_SCRIPT */</script>
 </body></html>

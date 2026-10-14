@@ -1,8 +1,8 @@
 # A Clean Glean
 
-A local interactive visualization builder for Glean Canvas. Choose a US account map, trend chart, or ranked comparison; import a CSV/TSV table or paste rows; map columns; set titles, source, data date, color, font, and optional logo; preview; then download a self-contained HTML snapshot. Save an editable JSON project or a separate brand preset to reuse later. No packages, accounts, or external services are required.
+A local interactive visualization builder for Glean Canvas. Choose a US account map, trend chart, ranked comparison, pipeline funnel, account scatterplot, or category heatmap; import a CSV/TSV table or paste rows; map columns; set titles, source, data date, color, font, and optional logo; preview; then download a self-contained HTML snapshot. Save an editable JSON project or a separate brand preset to reuse later. No packages, accounts, or external services are required.
 
-The map has tier filters, state selection, account search, and a ranked state table. The trend chart has series toggles and date filters. Ranked bars have sort, search, selectable values, and a data table. All examples are explicitly labeled synthetic. Imported data stays local in the browser until you download a file or deliberately upload it elsewhere.
+The map has tier filters, state selection, account search, and a ranked state table. The trend chart has series toggles and date filters. Ranked bars have sort, search, selectable values, and a data table. The funnel switches between values and stage-to-stage ratios. The scatterplot filters by segment, name, and minimum X/Y values. The heatmap searches each category dimension and sorts rows by total. Every chart has keyboard-focusable marks and an exact-value table. Expand the preview for a full-size view. All examples are explicitly labeled synthetic. Imported data stays local in the browser until you download a file or deliberately upload it elsewhere.
 
 ## Run locally
 
@@ -21,7 +21,7 @@ npm run build
 npm test
 ```
 
-The build produces `dist/index.html` (builder), `dist/account-map.html`, `dist/examples/trend.html`, and `dist/examples/comparison.html`. The three standalone examples are synthetic; replace their data before using them for decisions.
+The build produces `dist/index.html` (builder), `dist/account-map.html`, and five examples in `dist/examples/`: `trend.html`, `comparison.html`, `funnel.html`, `scatter.html`, and `heatmap.html`. The six standalone examples are synthetic; replace their data before using them for decisions.
 
 ## Using your own data
 
@@ -34,6 +34,10 @@ The build produces `dist/index.html` (builder), `dist/account-map.html`, `dist/e
 **Map columns:** account name, HQ state, tier (`1`–`4` or `Tier 1`–`Tier 4`); account ID is optional. Full US state names and postal abbreviations are accepted. Outside-US and blank locations remain visible as separate groups.
 
 **Trend columns:** ISO date (`YYYY-MM-DD`), numeric value; optional series and annotation. One point per date/series pair. **Ranked bars:** category and numeric value; optional annotation. Category names must be unique. Duplicate trend points and categories require correction; the builder does not aggregate them silently.
+
+**Pipeline funnel:** ordered stage and non-negative value; optional annotation. Input order is stage order. The chart reports each stage as a share of the preceding stage, even if a value rises. Interpret those ratios as conversion only when the stages describe the same cohort over a consistent period.
+
+**Account scatterplot:** unique account name, numeric X and Y values; optional non-negative bubble size, segment, and annotation. Blank size defaults to 1. Set horizontal and vertical labels to explain the measures. **Category heatmap:** row category, column category, and numeric value; optional annotation. Each row/column pair must be unique. Signed values are supported; orange means negative, pale means smaller magnitude, and gray means no supplied value. Neither visual aggregates repeated records silently.
 
 The **Download sample HTML** and **Copy Glean prompt** controls support a separate workflow: ask Glean to populate an example with authorized data. Verify the returned rows, counts, source, and interactions. A Glean Canvas HTML artifact is a snapshot until a separate, supported refresh process is configured and tested.
 

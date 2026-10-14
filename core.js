@@ -66,10 +66,14 @@
     return match ? match.code : raw;
   }
   function mapRows(parsed, mapping, template, states) {
-    const required = template === 'map' ? ['name','state','tier'] : template === 'trend' ? ['date','value'] : ['category','value'];
+    const requirements={map:['name','state','tier'],trend:['date','value'],comparison:['category','value'],funnel:['stage','value'],scatter:['name','x','y'],heatmap:['row','column','value']};
+    const required=requirements[template];
+    if (!required) throw new Error('Unknown visual type.');
     for (const field of required) if (mapping[field] === undefined || !parsed.headers.includes(mapping[field])) throw new Error('Map the ' + field + ' column.');
     const indices = Object.fromEntries(Object.entries(mapping).map(([key, header]) => [key, parsed.headers.indexOf(header)]));
     const data = [], errors = [], warnings = [], keys = new Set();
+    const labels={row:new Map(),column:new Map(),segment:new Map()};
+    const canonical=(kind,raw)=>{const key=raw.toLowerCase();if(!labels[kind].has(key))labels[kind].set(key,raw);return labels[kind].get(key);};
     for (let i = 0; i < parsed.rows.length; i++) {
       const source = parsed.rows[i], rowNumber = i + 2, get = field => indices[field] < 0 || indices[field] === undefined ? '' : source[indices[field]];
       if (template === 'map') {
@@ -88,12 +92,32 @@
         if (!valueText || !Number.isFinite(value)) { errors.push('Row '+rowNumber+': value must be a number.'); continue; }
         const key=date+'|'+series.toLowerCase(); if (keys.has(key)) { errors.push('Row '+rowNumber+': date and series are repeated.'); continue; }
         keys.add(key); data.push({date,value,series,note:get('note')});
-      } else {
+      } else if (template === 'comparison') {
         const category=get('category'), valueText=get('value'), value=Number(valueText);
         if (!category) { errors.push('Row '+rowNumber+': category is empty.'); continue; }
         if (!valueText || !Number.isFinite(value)) { errors.push('Row '+rowNumber+': value must be a number.'); continue; }
         const key=category.toLowerCase(); if (keys.has(key)) { errors.push('Row '+rowNumber+': category is repeated.'); continue; }
         keys.add(key); data.push({category,value,note:get('note')});
+      } else if (template === 'funnel') {
+        const stage=get('stage'), valueText=get('value'), value=Number(valueText);
+        if (!stage) { errors.push('Row '+rowNumber+': stage is empty.'); continue; }
+        if (!valueText || !Number.isFinite(value) || value<0) { errors.push('Row '+rowNumber+': value must be a non-negative number.'); continue; }
+        const key=stage.toLowerCase(); if (keys.has(key)) { errors.push('Row '+rowNumber+': stage is repeated.'); continue; }
+        keys.add(key); data.push({stage,value,note:get('note')});
+      } else if (template === 'scatter') {
+        const name=get('name'), xText=get('x'), yText=get('y'), sizeText=get('size'), x=Number(xText), y=Number(yText), size=sizeText?Number(sizeText):1;
+        if (!name) { errors.push('Row '+rowNumber+': name is empty.'); continue; }
+        if (!xText || !Number.isFinite(x) || !yText || !Number.isFinite(y)) { errors.push('Row '+rowNumber+': X and Y must be numbers.'); continue; }
+        if (!Number.isFinite(size) || size<0) { errors.push('Row '+rowNumber+': size must be a non-negative number.'); continue; }
+        const key=name.toLowerCase(); if (keys.has(key)) { errors.push('Row '+rowNumber+': name is repeated.'); continue; }
+        keys.add(key); data.push({name,x,y,size,segment:canonical('segment',get('segment')||'All accounts'),note:get('note')});
+      } else if (template === 'heatmap') {
+        const rawRow=get('row'), rawColumn=get('column'), valueText=get('value'), value=Number(valueText);
+        const row=rawRow?canonical('row',rawRow):'',column=rawColumn?canonical('column',rawColumn):'';
+        if (!row || !column) { errors.push('Row '+rowNumber+': row and column are required.'); continue; }
+        if (!valueText || !Number.isFinite(value)) { errors.push('Row '+rowNumber+': value must be a number.'); continue; }
+        const key=JSON.stringify([row.toLowerCase(),column.toLowerCase()]); if (keys.has(key)) { errors.push('Row '+rowNumber+': row and column are repeated.'); continue; }
+        keys.add(key); data.push({row,column,value,note:get('note')});
       }
     }
     if (errors.length) throw new Error(errors.slice(0,8).join(' ') + (errors.length>8?' '+(errors.length-8)+' more rows need correction.':''));
@@ -103,20 +127,27 @@
   }
   function validateProject(value, states) {
     if (!value || value.schemaVersion !== 1) throw new Error('This project file uses an unsupported version.');
-    if (!['map','trend','comparison'].includes(value.templateId)) throw new Error('This project has an unknown visual type.');
+    if (!['map','trend','comparison','funnel','scatter','heatmap'].includes(value.templateId)) throw new Error('This project has an unknown visual type.');
     if (!Array.isArray(value.data) || !value.data.length || value.data.length > 10000) throw new Error('Project data must contain 1–10,000 rows.');
     if (!value.theme || !/^#[0-9a-f]{6}$/i.test(value.theme.primary)) throw new Error('Project brand color must be a six-digit hex value.');
     if (value.theme.font && !['system','jakarta','serif','mono'].includes(value.theme.font)) throw new Error('Project font choice is unsupported.');
     if (value.theme.logo && (!/^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(value.theme.logo) || value.theme.logo.length > 1400000)) throw new Error('Project logo must be a PNG or JPEG under 1 MB.');
     if (!value.presentation || typeof value.presentation.title !== 'string' || typeof value.presentation.subtitle !== 'string' || typeof value.presentation.source !== 'string') throw new Error('Project presentation settings are invalid.');
+    if ((value.presentation.xLabel!==undefined && typeof value.presentation.xLabel!=='string') || (value.presentation.yLabel!==undefined && typeof value.presentation.yLabel!=='string')) throw new Error('Project axis labels must be text.');
     if (value.data.some(row => !row || typeof row !== 'object' || Array.isArray(row))) throw new Error('Every project row must be an object.');
     if (value.templateId==='map' && value.data.some(row => typeof row.name!=='string' || typeof row.state!=='string' || !Number.isInteger(row.tier) || row.tier<1 || row.tier>4)) throw new Error('Map project rows must have an account name, state, and numeric tier 1–4.');
     if (value.templateId==='map' && value.data.some(row => normalizeState(row.state,states)!==row.state)) throw new Error('Map project states must use normalized postal abbreviations or an outside-US label.');
     if (value.templateId==='trend' && value.data.some(row => typeof row.date!=='string' || typeof row.value!=='number' || !Number.isFinite(row.value) || typeof row.series!=='string')) throw new Error('Trend project rows must have a date, numeric value, and series.');
     if (value.templateId==='comparison' && value.data.some(row => typeof row.category!=='string' || typeof row.value!=='number' || !Number.isFinite(row.value))) throw new Error('Comparison project rows must have a category and numeric value.');
-    const headers = value.templateId==='map'?['name','state','tier','id']:value.templateId==='trend'?['date','value','series','note']:['category','value','note'];
+    if (value.templateId==='funnel' && value.data.some(row => typeof row.stage!=='string' || typeof row.value!=='number' || !Number.isFinite(row.value) || row.value<0)) throw new Error('Funnel project rows must have a stage and non-negative numeric value.');
+    if (value.templateId==='scatter' && value.data.some(row => typeof row.name!=='string' || !Number.isFinite(row.x) || !Number.isFinite(row.y) || !Number.isFinite(row.size) || row.size<0 || typeof row.segment!=='string')) throw new Error('Scatterplot rows must have a name, numeric X/Y, size, and segment.');
+    if (value.templateId==='heatmap' && value.data.some(row => typeof row.row!=='string' || typeof row.column!=='string' || !Number.isFinite(row.value))) throw new Error('Heatmap rows must have row, column, and numeric value.');
+    const headersByTemplate={map:['name','state','tier','id'],trend:['date','value','series','note'],comparison:['category','value','note'],funnel:['stage','value','note'],scatter:['name','x','y','size','segment','note'],heatmap:['row','column','value','note']};
+    const headers=headersByTemplate[value.templateId];
     const parsed = {headers,rows:value.data.map(row=>headers.map(h=>String(row[h]??'')))};
-    mapRows(parsed,Object.fromEntries(headers.map(h=>[h,h])),value.templateId,states);
+    const checked=mapRows(parsed,Object.fromEntries(headers.map(h=>[h,h])),value.templateId,states).data;
+    if (value.templateId==='scatter' && value.data.some((row,i)=>row.segment!==checked[i].segment)) throw new Error('Scatterplot segments must use consistent capitalization.');
+    if (value.templateId==='heatmap' && value.data.some((row,i)=>row.row!==checked[i].row || row.column!==checked[i].column)) throw new Error('Heatmap categories must use consistent capitalization.');
     return value;
   }
   global.AccountMap = {serialize,summarize,scaleMax,sampleAccounts,parseTable,normalizeState,mapRows,validateProject};

@@ -38,16 +38,46 @@ test('comparison import retains signed numbers and rejects duplicate categories'
   assert.throws(()=>A.mapRows(A.parseTable('category,value\nA,1\na,2'),mapping,'comparison',states),/repeated/);
 });
 
+test('funnel import preserves stage order and rejects invalid values or repeated stages',()=>{
+  const mapping={stage:'stage',value:'value'};
+  const data=A.mapRows(A.parseTable('stage,value\nIdentified,120\nEngaged,75\nQualified,30'),mapping,'funnel',states).data;
+  assert.equal(data.map(row=>row.stage).join(','),'Identified,Engaged,Qualified');
+  assert.throws(()=>A.mapRows(A.parseTable('stage,value\nA,-1'),mapping,'funnel',states),/non-negative/);
+  assert.throws(()=>A.mapRows(A.parseTable('stage,value\nA,2\na,1'),mapping,'funnel',states),/repeated/);
+});
+
+test('scatter import keeps signed axes and rejects duplicate accounts or negative size',()=>{
+  const mapping={name:'name',x:'x',y:'y',size:'size',segment:'segment'};
+  const data=A.mapRows(A.parseTable('name,x,y,size,segment\nA,-2,4,0,Priority\nB,3,-5,,Watch'),mapping,'scatter',states).data;
+  assert.equal(data[0].x,-2);assert.equal(data[1].y,-5);assert.equal(data[1].size,1);
+  const grouped=A.mapRows(A.parseTable('name,x,y,segment\nA,1,2,Tier 1\nB,2,3,tier 1'),{name:'name',x:'x',y:'y',segment:'segment'},'scatter',states).data;
+  assert.equal(grouped[1].segment,'Tier 1');
+  assert.throws(()=>A.mapRows(A.parseTable('name,x,y\nA,1,2\na,3,4'),{name:'name',x:'x',y:'y'},'scatter',states),/repeated/);
+  assert.throws(()=>A.mapRows(A.parseTable('name,x,y,size\nA,1,2,-1'),{name:'name',x:'x',y:'y',size:'size'},'scatter',states),/non-negative/);
+});
+
+test('heatmap import retains signed cells and rejects repeated intersections',()=>{
+  const mapping={row:'row',column:'column',value:'value'};
+  const data=A.mapRows(A.parseTable('row,column,value\nEnterprise,Security,4\nGrowth,Security,-2'),mapping,'heatmap',states).data;
+  assert.equal(data[1].value,-2);
+  const grouped=A.mapRows(A.parseTable('row,column,value\nEnterprise,Security,4\nenterprise,Finance,2'),mapping,'heatmap',states).data;
+  assert.equal(grouped[1].row,'Enterprise');
+  assert.throws(()=>A.mapRows(A.parseTable('row,column,value\nA,B,1\na,b,2'),mapping,'heatmap',states),/repeated/);
+});
+
 test('project validation preserves canonical data and rejects invalid files',()=>{
   const project={schemaVersion:1,templateId:'map',data:[{id:'a',name:'A',state:'CA',tier:1}],theme:{primary:'#3158d5',logo:''},presentation:{title:'Map',subtitle:'',source:'Source',unit:'',dataDate:''},sample:false};
   assert.equal(A.validateProject(JSON.parse(JSON.stringify(project)),states).data[0].state,'CA');
   assert.throws(()=>A.validateProject({...project,schemaVersion:2},states),/unsupported/);
   assert.throws(()=>A.validateProject({...project,data:[{name:'A',state:'California',tier:1}]},states),/normalized/);
   assert.throws(()=>A.validateProject({...project,data:[{name:'A',state:'CA',tier:'1'}]},states),/numeric tier/);
+  const scatter={...project,templateId:'scatter',data:[{name:'A',x:3,y:4,size:1,segment:'Tier 1',note:''}]};
+  assert.equal(A.validateProject(scatter,states).data[0].name,'A');
+  assert.throws(()=>A.validateProject({...scatter,data:[{...scatter.data[0],size:-1}]},states),/size/);
 });
 
 test('all bundled artifacts have inline code, a print rule, and parsable scripts',async()=>{
-  for(const path of ['dist/index.html','dist/account-map.html','dist/examples/trend.html','dist/examples/comparison.html']){
+  for(const path of ['dist/index.html','dist/account-map.html','dist/examples/trend.html','dist/examples/comparison.html','dist/examples/funnel.html','dist/examples/scatter.html','dist/examples/heatmap.html']){
     const html=await readFile(path,'utf8');assert.ok(html.includes('<!doctype html>'));
     assert.ok(!/<script[^>]+src=|<link[^>]+href=|\bfetch\s*\(/.test(html),path);
     assert.ok((html.match(/<\/script>/g)||[]).length===1,path);
